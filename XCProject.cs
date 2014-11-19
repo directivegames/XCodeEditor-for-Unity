@@ -1055,7 +1055,7 @@ namespace UnityEditor.XCodeEditor
 			// Parse result object directly into file
 			PBXParser parser = new PBXParser();
 			StreamWriter saveFile = File.CreateText( System.IO.Path.Combine( this.filePath, "project.pbxproj" ) );
-			saveFile.Write( parser.Encode( result, false ) );
+			saveFile.Write( parser.Encode( result, true ) );
 			saveFile.Close();
 
 //			Xcode4Controller.Connect();

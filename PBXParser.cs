@@ -29,6 +29,9 @@ namespace UnityEditor.XCodeEditor
 		public const string COMMENT_BEGIN_TOKEN = "/*";
 		public const string COMMENT_END_TOKEN = "*/";
 		public const string COMMENT_LINE_TOKEN = "//";
+		public const int WHITESPACE_INDENT_SIZE = 4;
+		public const int DICTIONARY_WRAP_TRESHOLD = 4;
+		public const int ARRAY_WRAP_TRESHOLD = 4;
 		private const int BUILDER_CAPACITY = 20000;
 
 		//
@@ -57,7 +60,7 @@ namespace UnityEditor.XCodeEditor
 //			indent = 0;
 
 			StringBuilder builder = new StringBuilder( PBX_HEADER_TOKEN, BUILDER_CAPACITY );
-			bool success = SerializeValue( pbxData, builder, readable );
+			bool success = SerializeValue( pbxData, builder, 0, readable );
 
 			return ( success ? builder.ToString() : null );
 		}
@@ -273,28 +276,28 @@ namespace UnityEditor.XCodeEditor
 		#endregion
 		#region Serialize
 
-		private bool SerializeValue( object value, StringBuilder builder, bool readable = false )
+		private bool SerializeValue( object value, StringBuilder builder, int indentLevel, bool readable = false )
 		{
 			if( value == null ) {
 				builder.Append( "null" );
 			}
 			else if( value is PBXObject ) {
-				SerializeDictionary( ((PBXObject)value).data, builder, readable );
+				SerializeDictionary( ((PBXObject)value).data, builder, indentLevel, readable );
 			}
 			else if( value is Dictionary<string, object> ) {
-				SerializeDictionary( (Dictionary<string, object>)value, builder, readable );
+				SerializeDictionary( (Dictionary<string, object>)value, builder, indentLevel, readable );
 			}
 			else if( value.GetType().IsArray ) {
-				SerializeArray( new ArrayList( (ICollection)value ), builder, readable );
+				SerializeArray( new ArrayList( (ICollection)value ), builder, indentLevel, readable );
 			}
 			else if( value is ArrayList ) {
-				SerializeArray( (ArrayList)value, builder, readable );
+				SerializeArray( (ArrayList)value, builder, indentLevel, readable );
 			}
 			else if( value is string ) {
-				SerializeString( (string)value, builder, readable );
+				SerializeString( (string)value, builder, indentLevel, false, readable );
 			}
 			else if( value is Char ) {
-				SerializeString( Convert.ToString( (char)value ), builder, readable );
+				SerializeString( Convert.ToString( (char)value ), builder, indentLevel, false, readable );
 			}
 			else if( value is bool ) {
 				builder.Append( Convert.ToInt32( value ).ToString() );
@@ -322,42 +325,91 @@ namespace UnityEditor.XCodeEditor
 			return true;
 		}
 
-		private bool SerializeDictionary( Dictionary<string, object> dictionary, StringBuilder builder, bool readable = false )
+		private bool SerializeDictionary( Dictionary<string, object> dictionary, StringBuilder builder, int indentLevel, bool readable = false )
 		{
+			bool splitLines = dictionary.Count > DICTIONARY_WRAP_TRESHOLD;
+
 			builder.Append( DICTIONARY_BEGIN_TOKEN );
+			if ( readable && splitLines ) {
+				builder.Append( WHITESPACE_NEWLINE );
+			}
+			++indentLevel;
 
 			foreach( KeyValuePair<string, object> pair in dictionary ) {
-				SerializeString( pair.Key, builder );
+				if ( readable && splitLines && indentLevel > 0 ) {
+					builder.Append( WHITESPACE_SPACE, WHITESPACE_INDENT_SIZE * indentLevel );
+				}
+				SerializeString( pair.Key, builder, indentLevel, false, readable );
+				if ( readable ) {
+					builder.Append( WHITESPACE_SPACE );
+				}
 				builder.Append( DICTIONARY_ASSIGN_TOKEN );
-				SerializeValue( pair.Value, builder );
+				if ( readable ) {
+					builder.Append( WHITESPACE_SPACE );
+				}
+				SerializeValue( pair.Value, builder, indentLevel, readable );
 				builder.Append( DICTIONARY_ITEM_DELIMITER_TOKEN );
+				if ( readable ) {
+					if ( splitLines ) {
+						builder.Append( WHITESPACE_NEWLINE );
+					}
+					else {
+						builder.Append( WHITESPACE_SPACE );
+					}
+				}
 			}
 
+			--indentLevel;
+			if ( readable && splitLines && indentLevel > 0 ) {
+				builder.Append( WHITESPACE_SPACE, WHITESPACE_INDENT_SIZE * indentLevel );
+			}
 			builder.Append( DICTIONARY_END_TOKEN );
 			return true;
 		}
 
-		private bool SerializeArray( ArrayList anArray, StringBuilder builder, bool readable = false )
+		private bool SerializeArray( ArrayList anArray, StringBuilder builder, int indentLevel, bool readable = false )
 		{
+			bool splitLines = anArray.Count > DICTIONARY_WRAP_TRESHOLD;
+
 			builder.Append( ARRAY_BEGIN_TOKEN );
+			if ( readable && splitLines ) {
+				builder.Append ( WHITESPACE_NEWLINE );
+			}
+			++indentLevel;
 
 			for( int i = 0; i < anArray.Count; i++ )
 			{
 				object value = anArray[i];
 	
-				if( !SerializeValue( value, builder ) )
+				if ( readable && splitLines && indentLevel > 0 ) {
+					builder.Append( WHITESPACE_SPACE, WHITESPACE_INDENT_SIZE * indentLevel );
+				}
+
+				if( !SerializeValue( value, builder, indentLevel, readable ) )
 				{
 					return false;
 				}
 
 				builder.Append( ARRAY_ITEM_DELIMITER_TOKEN );
+				if ( readable ) {
+					if ( splitLines ) {
+						builder.Append( WHITESPACE_NEWLINE );
+					}
+					else {
+						builder.Append( WHITESPACE_SPACE );
+					}
+				}
 			}
-	
+
+			--indentLevel;
+			if ( readable && splitLines && indentLevel > 0 ) {
+				builder.Append( WHITESPACE_SPACE, WHITESPACE_INDENT_SIZE * indentLevel );
+			}
 			builder.Append( ARRAY_END_TOKEN );
 			return true;
 		}
 
-		private bool SerializeString( string aString, StringBuilder builder, bool useQuotes = false, bool readable = false )
+		private bool SerializeString( string aString, StringBuilder builder, int indentLevel, bool useQuotes = false, bool readable = false )
 		{
 			// Is a GUID?
 			if( Regex.IsMatch( aString, @"^[A-F0-9]{24}$" ) ) {
