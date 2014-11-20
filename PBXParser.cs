@@ -327,18 +327,14 @@ namespace UnityEditor.XCodeEditor
 
 		private bool SerializeDictionary( Dictionary<string, object> dictionary, StringBuilder builder, int indentLevel, bool readable = false )
 		{
-			bool splitLines = dictionary.Count > DICTIONARY_WRAP_TRESHOLD;
+			bool splitLines = ShouldBreakDictionary( dictionary );
 
 			builder.Append( DICTIONARY_BEGIN_TOKEN );
-			if ( readable && splitLines ) {
-				builder.Append( WHITESPACE_NEWLINE );
-			}
+			AddWhitespace( builder, readable, splitLines );
 			++indentLevel;
 
 			foreach( KeyValuePair<string, object> pair in dictionary ) {
-				if ( readable && splitLines && indentLevel > 0 ) {
-					builder.Append( WHITESPACE_SPACE, WHITESPACE_INDENT_SIZE * indentLevel );
-				}
+				Indent( builder, readable, splitLines, indentLevel );
 				SerializeString( pair.Key, builder, indentLevel, false, readable );
 				if ( readable ) {
 					builder.Append( WHITESPACE_SPACE );
@@ -349,41 +345,28 @@ namespace UnityEditor.XCodeEditor
 				}
 				SerializeValue( pair.Value, builder, indentLevel, readable );
 				builder.Append( DICTIONARY_ITEM_DELIMITER_TOKEN );
-				if ( readable ) {
-					if ( splitLines ) {
-						builder.Append( WHITESPACE_NEWLINE );
-					}
-					else {
-						builder.Append( WHITESPACE_SPACE );
-					}
-				}
+				AddWhitespace( builder, readable, splitLines );
 			}
 
 			--indentLevel;
-			if ( readable && splitLines && indentLevel > 0 ) {
-				builder.Append( WHITESPACE_SPACE, WHITESPACE_INDENT_SIZE * indentLevel );
-			}
+			Indent( builder, readable, splitLines, indentLevel );
 			builder.Append( DICTIONARY_END_TOKEN );
 			return true;
 		}
 
 		private bool SerializeArray( ArrayList anArray, StringBuilder builder, int indentLevel, bool readable = false )
 		{
-			bool splitLines = anArray.Count > DICTIONARY_WRAP_TRESHOLD;
+			bool splitLines = ShouldBreakArray( anArray );
 
 			builder.Append( ARRAY_BEGIN_TOKEN );
-			if ( readable && splitLines ) {
-				builder.Append ( WHITESPACE_NEWLINE );
-			}
+			AddWhitespace( builder, readable, splitLines );
 			++indentLevel;
 
 			for( int i = 0; i < anArray.Count; i++ )
 			{
 				object value = anArray[i];
 	
-				if ( readable && splitLines && indentLevel > 0 ) {
-					builder.Append( WHITESPACE_SPACE, WHITESPACE_INDENT_SIZE * indentLevel );
-				}
+				Indent( builder, readable, splitLines, indentLevel );
 
 				if( !SerializeValue( value, builder, indentLevel, readable ) )
 				{
@@ -391,20 +374,11 @@ namespace UnityEditor.XCodeEditor
 				}
 
 				builder.Append( ARRAY_ITEM_DELIMITER_TOKEN );
-				if ( readable ) {
-					if ( splitLines ) {
-						builder.Append( WHITESPACE_NEWLINE );
-					}
-					else {
-						builder.Append( WHITESPACE_SPACE );
-					}
-				}
+				AddWhitespace( builder, readable, splitLines );
 			}
 
 			--indentLevel;
-			if ( readable && splitLines && indentLevel > 0 ) {
-				builder.Append( WHITESPACE_SPACE, WHITESPACE_INDENT_SIZE * indentLevel );
-			}
+			Indent( builder, readable, splitLines, indentLevel );
 			builder.Append( ARRAY_END_TOKEN );
 			return true;
 		}
@@ -437,6 +411,63 @@ namespace UnityEditor.XCodeEditor
 				builder.Append( QUOTEDSTRING_END_TOKEN );
 
 			return true;
+		}
+
+		private void Indent( StringBuilder builder, bool readable, bool splitLines, int indentLevel )
+		{
+			if ( readable && splitLines && indentLevel > 0 ) {
+				builder.Append( WHITESPACE_SPACE, WHITESPACE_INDENT_SIZE * indentLevel );
+			}
+		}
+
+		private void AddWhitespace( StringBuilder builder, bool readable, bool splitLines )
+		{
+			if ( readable ) {
+				if ( splitLines ) {
+					builder.Append( WHITESPACE_NEWLINE );
+				}
+				else {
+					builder.Append( WHITESPACE_SPACE );
+				}
+			}
+		}
+
+		private bool ShouldBreakDictionary( Dictionary<string, object> aDictionary )
+		{
+			bool splitLines = aDictionary.Count > DICTIONARY_WRAP_TRESHOLD;
+			if ( !splitLines ) {
+				foreach( KeyValuePair<string, object> pair in aDictionary ) {
+					object value = pair.Value;
+					if ( IsSplitableCollection( value ) ) {
+						splitLines = true;
+						break;
+					}
+				}
+			}
+			return splitLines;
+		}
+
+		private bool ShouldBreakArray( ArrayList anArray )
+		{
+			bool splitLines = anArray.Count > ARRAY_WRAP_TRESHOLD;
+			if ( !splitLines ) {
+				for ( int i = 0; i < anArray.Count; i++ ) {
+					object value = anArray[i];
+					if ( IsSplitableCollection( value ) ) {
+						splitLines = true;
+						break;
+					}
+				}
+			}
+			return splitLines;
+		}
+
+		private bool IsSplitableCollection( object anObject )
+		{
+			if ( anObject is ArrayList || anObject is Dictionary<string, object> || anObject.GetType().IsArray ) {
+				return true;
+			}
+			return false;
 		}
 
 		#endregion
